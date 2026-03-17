@@ -102,7 +102,7 @@ export default function SnakeGame() {
       if (newDirection) {
         setDirection(newDirection);
         directionRef.current = newDirection;
-        // Start game movement on first key press
+        // Start the game movement on first key press
         if (!gameStartedRef.current) {
           gameStartedRef.current = true;
         }
@@ -120,7 +120,7 @@ export default function SnakeGame() {
     gameLoopRef.current = setInterval(() => {
       // Check if player has pressed any key yet
       if (!gameStartedRef.current) {
-        return; // Don't move snake until player presses a key
+        return; // Don't move the snake until player presses a key
       }
 
       setSnake(currentSnake => {
@@ -317,48 +317,169 @@ export default function SnakeGame() {
           </div>
         )}
 
-        {gameState === 'start' && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center z-40">
-            <div className="bg-white rounded-xl p-8 text-center">
-              <h2 className="text-3xl font-bold mb-4 text-gray-800">Ready to Play?</h2>
-              <p className="text-gray-600 mb-2">Difficulty: <span className="font-bold capitalize">{difficulty}</span> ({GRID_SIZE}x{GRID_SIZE})</p>
-              <p className="text-gray-600 mb-6">Apples: <span className="font-bold">{appleCount}</span></p>
-              <p className="text-gray-600 mb-6">Press Start, then use arrow keys or WASD to move snake</p>
+        <div className="flex justify-center gap-8 text-lg">
+          <div className="text-gray-600">Score: <span className="font-bold text-green-600">{score}</span></div>
+          <div className="text-gray-600">High Score: <span className="font-bold text-blue-600">{highScore}</span></div>
+        </div>
+      </div>
+
+      <div className="flex justify-center mb-6 relative">
+        <div 
+          className="relative bg-gray-800 rounded-lg shadow-inner"
+          style={{
+            width: GRID_SIZE * CELL_SIZE,
+            height: GRID_SIZE * CELL_SIZE,
+          }}
+        >
+          {/* Grid lines */}
+          {Array.from({ length: GRID_SIZE }).map((_, i) => (
+            <div key={`h-${i}`}>
+              <div
+                className="absolute bg-gray-700"
+                style={{
+                  left: 0,
+                  top: i * CELL_SIZE,
+                  width: GRID_SIZE * CELL_SIZE,
+                  height: 1,
+                }}
+              />
+              <div
+                className="absolute bg-gray-700"
+                style={{
+                  left: i * CELL_SIZE,
+                  top: 0,
+                  width: 1,
+                  height: GRID_SIZE * CELL_SIZE,
+                }}
+              />
+            </div>
+          ))}
+
+          {/* Snake */}
+          {snake.map((segment, index) => (
+            <div
+              key={index}
+              className={`absolute transition-all duration-100 ${
+                index === 0 ? 'bg-green-500 z-20' : 'bg-green-400 z-10'
+              } rounded-sm`}
+              style={{
+                left: segment.x * CELL_SIZE + 2,
+                top: segment.y * CELL_SIZE + 2,
+                width: CELL_SIZE - 4,
+                height: CELL_SIZE - 4,
+              }}
+            />
+          ))}
+
+          {/* Apples */}
+          {apples.map((apple, index) => (
+            <div
+              key={index}
+              className="absolute bg-red-500 rounded-full transition-all duration-100 z-30"
+              style={{
+                left: apple.x * CELL_SIZE + 8,
+                top: apple.y * CELL_SIZE + 8,
+                width: CELL_SIZE - 16,
+                height: CELL_SIZE - 16,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Game State Overlay */}
+      {gameState === 'difficultySelect' && (
+        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center z-40">
+          <div className="bg-white rounded-xl p-8 text-center">
+            <h2 className="text-3xl font-bold mb-6 text-gray-800">Select Difficulty</h2>
+            <div className="flex flex-col gap-3 mb-6">
               <button
-                onClick={startGame}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg transition-colors"
+                onClick={() => selectDifficulty('easy')}
+                className="px-6 py-3 rounded-lg font-medium transition-colors bg-green-500 text-white hover:bg-green-600"
               >
-                Start Game
+                Easy (10x10) - Slower
+              </button>
+              <button
+                onClick={() => selectDifficulty('medium')}
+                className="px-6 py-3 rounded-lg font-medium transition-colors bg-yellow-500 text-white hover:bg-yellow-600"
+              >
+                Medium (7x7) - Balanced
+              </button>
+              <button
+                onClick={() => selectDifficulty('hard')}
+                className="px-6 py-3 rounded-lg font-medium transition-colors bg-red-500 text-white hover:bg-red-600"
+              >
+                Hard (5x5) - Faster
               </button>
             </div>
-          </div>
-        )}
-
-        {gameState === 'gameOver' && (
-          <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center z-40">
-            <div className="bg-white rounded-xl p-8 text-center">
-              <h2 className="text-3xl font-bold mb-4 text-red-600">Game Over!</h2>
-              <p className="text-2xl mb-2 text-gray-800">Final Score: <span className="font-bold">{score}</span></p>
-              {score === highScore && score > 0 && (
-                <p className="text-lg mb-4 text-green-600 font-bold">New High Score!</p>
-              )}
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={startGame}
-                  className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-                >
-                  Play Again
-                </button>
-                <button
-                  onClick={() => setGameState('difficultySelect')}
-                  className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
-                >
-                  Change Settings
-                </button>
+            
+            {/* Apple Count Slider */}
+            <div className="mb-6">
+              <label className="block text-gray-700 font-medium mb-2">
+                Apples: {appleCount}
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={appleCount}
+                onChange={(e) => setAppleCount(Number(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500"
+              />
+              <div className="flex justify-between text-xs text-gray-500 mt-1">
+                <span>1</span>
+                <span>10</span>
               </div>
             </div>
+            
+            <button
+              onClick={() => setGameState('start')}
+              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg transition-colors w-full"
+            >
+              Start Game
+            </button>
           </div>
-        )}
+        </div>
+      )}
+
+      {gameState === 'start' && (
+        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center z-40">
+          <div className="bg-white rounded-xl p-8 text-center">
+            <h2 className="text-3xl font-bold mb-4 text-gray-800">Ready to Play?</h2>
+            <p className="text-gray-600 mb-2">Difficulty: <span className="font-bold capitalize">{difficulty}</span> ({GRID_SIZE}x{GRID_SIZE})</p>
+            <p className="text-gray-600 mb-6">Apples: <span className="font-bold">{appleCount}</span></p>
+            <p className="text-gray-600 mb-6">Press Start, then use arrow keys or WASD to move the snake</p>
+            <button
+              onClick={startGame}
+              className="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg transition-colors"
+            >
+              Start Game
+            </button>
+
+{/* Game State Overlay */}
+{gameState === 'difficultySelect' && (
+  <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center z-40">
+    <div className="bg-white rounded-xl p-8 text-center">
+      <h2 className="text-3xl font-bold mb-6 text-gray-800">Select Difficulty</h2>
+      <div className="flex flex-col gap-3 mb-6">
+        <button
+          onClick={() => selectDifficulty('easy')}
+          className="px-6 py-3 rounded-lg font-medium transition-colors bg-green-500 text-white hover:bg-green-600"
+        >
+          Easy (10x10) - Slower
+        </button>
+        <button
+          onClick={() => selectDifficulty('medium')}
+          className="px-6 py-3 rounded-lg font-medium transition-colors bg-yellow-500 text-white hover:bg-yellow-600"
+        >
+          Medium (7x7) - Balanced
+        </button>
+        <button
+          onClick={() => selectDifficulty('hard')}
+          className="px-6 py-3 rounded-lg font-medium transition-colors bg-red-500 text-white hover:bg-red-600"
+        >
+          Hard (5x5) - Faster
+        </button>
 
         <div className="text-center text-gray-500 text-sm">
           <p>Use arrow keys or WASD to move</p>
