@@ -6,6 +6,9 @@ type Position = { x: number; y: number };
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type Difficulty = 'easy' | 'medium' | 'hard';
 
+// Global high score storage key
+const GLOBAL_HIGH_SCORE_KEY = 'snakeGameGlobalHighScore';
+
 const DIFFICULTY_SETTINGS = {
   easy: { gridSize: 10, cellSize: 40, speed: 250 },
   medium: { gridSize: 7, cellSize: 50, speed: 200 },
@@ -24,6 +27,21 @@ export default function SnakeGame() {
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
   const directionRef = useRef(direction);
   const gameStartedRef = useRef(false);
+
+  // Load global high score on mount
+  useEffect(() => {
+    const savedHighScore = localStorage.getItem(GLOBAL_HIGH_SCORE_KEY);
+    if (savedHighScore) {
+      setHighScore(parseInt(savedHighScore, 10));
+    }
+  }, []);
+
+  // Save global high score when it changes
+  useEffect(() => {
+    if (highScore > 0) {
+      localStorage.setItem(GLOBAL_HIGH_SCORE_KEY, highScore.toString());
+    }
+  }, [highScore]);
 
   const currentSettings = DIFFICULTY_SETTINGS[difficulty];
   const { gridSize: GRID_SIZE, cellSize: CELL_SIZE, speed: INITIAL_SPEED } = currentSettings;
@@ -194,7 +212,7 @@ export default function SnakeGame() {
 
           <div className="flex justify-center gap-8 text-lg">
             <div className="text-gray-600">Score: <span className="font-bold text-green-600">{score}</span></div>
-            <div className="text-gray-600">High Score: <span className="font-bold text-blue-600">{highScore}</span></div>
+            <div className="text-gray-600">Global High Score: <span className="font-bold text-blue-600">{highScore}</span></div>
           </div>
         </div>
 
@@ -340,7 +358,7 @@ export default function SnakeGame() {
               <h2 className="text-3xl font-bold mb-4 text-red-600">Game Over!</h2>
               <p className="text-2xl mb-2 text-gray-800">Final Score: <span className="font-bold">{score}</span></p>
               {score === highScore && score > 0 && (
-                <p className="text-lg mb-4 text-green-600 font-bold">New High Score!</p>
+                <p className="text-lg mb-4 text-green-600 font-bold">New Global High Score!</p>
               )}
               <div className="flex gap-3 justify-center">
                 <button
