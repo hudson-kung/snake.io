@@ -6,8 +6,8 @@ type Position = { x: number; y: number };
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
 type Difficulty = 'easy' | 'medium' | 'hard';
 
-// Global high score storage key
-const GLOBAL_HIGH_SCORE_KEY = 'snakeGameGlobalHighScore';
+// API endpoint for global high score
+const HIGH_SCORE_API = '/api/high-score';
 
 const DIFFICULTY_SETTINGS = {
   easy: { gridSize: 10, cellSize: 40, speed: 250 },
@@ -28,20 +28,44 @@ export default function SnakeGame() {
   const directionRef = useRef(direction);
   const gameStartedRef = useRef(false);
 
-  // Load global high score on mount
+  // Load global high score from Redis API
   useEffect(() => {
-    const savedHighScore = localStorage.getItem(GLOBAL_HIGH_SCORE_KEY);
-    if (savedHighScore) {
-      setHighScore(parseInt(savedHighScore, 10));
-    }
+    const fetchHighScore = async () => {
+      try {
+        const response = await fetch(HIGH_SCORE_API);
+        if (response.ok) {
+          const data = await response.json();
+          setHighScore(data.highScore);
+        }
+      } catch (error) {
+        console.error('Error fetching high score:', error);
+      }
+    };
+
+    fetchHighScore();
   }, []);
 
-  // Save global high score when it changes
-  useEffect(() => {
-    if (highScore > 0) {
-      localStorage.setItem(GLOBAL_HIGH_SCORE_KEY, highScore.toString());
+  // Update global high score in Redis when game ends
+  const updateGlobalHighScore = useCallback(async (newScore: number) => {
+    try {
+      const response = await fetch(HIGH_SCORE_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ score: newScore }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.isNewRecord) {
+          setHighScore(data.highScore);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating high score:', error);
     }
-  }, [highScore]);
+  }, []);
 
   const currentSettings = DIFFICULTY_SETTINGS[difficulty];
   const { gridSize: GRID_SIZE, cellSize: CELL_SIZE, speed: INITIAL_SPEED } = currentSettings;
@@ -163,14 +187,14 @@ export default function SnakeGame() {
         // Check wall collision
         if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
           setGameState('gameOver');
-          setHighScore(prev => Math.max(prev, score));
+          updateGlobalHighScore(score);
           return currentSnake;
         }
 
         // Check self collision
         if (currentSnake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
           setGameState('gameOver');
-          setHighScore(prev => Math.max(prev, score));
+          updateGlobalHighScore(score);
           return currentSnake;
         }
 
@@ -196,7 +220,7 @@ export default function SnakeGame() {
         clearInterval(gameLoopRef.current);
       }
     };
-  }, [gameState, apples, generateApples, score, appleCount]);
+  }, [gameState, apples, generateApples, score, appleCount, updateGlobalHighScore]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
