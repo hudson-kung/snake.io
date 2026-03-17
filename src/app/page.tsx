@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 type Position = { x: number; y: number };
 type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
-type Difficulty = 'easy' | 'medium' | 'hard';
+type Difficulty = 'easy' | 'medium' | 'hard' | 'allApples';
 
 // API endpoint for global high score
 const HIGH_SCORE_API = '/api/high-score';
@@ -12,7 +12,8 @@ const HIGH_SCORE_API = '/api/high-score';
 const DIFFICULTY_SETTINGS = {
   easy: { gridSize: 10, cellSize: 40, speed: 250 },
   medium: { gridSize: 7, cellSize: 50, speed: 200 },
-  hard: { gridSize: 5, cellSize: 70, speed: 150 }
+  hard: { gridSize: 5, cellSize: 70, speed: 150 },
+  allApples: { gridSize: 20, cellSize: 30, speed: 100 }
 };
 
 export default function SnakeGame() {
@@ -24,6 +25,7 @@ export default function SnakeGame() {
   const [gameState, setGameState] = useState<'difficultySelect' | 'start' | 'playing' | 'gameOver'>('difficultySelect');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
+  const [gridOffset, setGridOffset] = useState({ x: 0, y: 0 });
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
   const directionRef = useRef(direction);
   const gameStartedRef = useRef(false);
@@ -72,6 +74,21 @@ export default function SnakeGame() {
 
   // Generate multiple apple positions
   const generateApples = useCallback((currentSnake: Position[]): Position[] => {
+    // All Apples mode: generate apples for all empty squares
+    if (difficulty === 'allApples') {
+      const allApples: Position[] = [];
+      for (let x = 0; x < GRID_SIZE; x++) {
+        for (let y = 0; y < GRID_SIZE; y++) {
+          const isSnakePosition = currentSnake.some(segment => segment.x === x && segment.y === y);
+          if (!isSnakePosition) {
+            allApples.push({ x, y });
+          }
+        }
+      }
+      return allApples;
+    }
+
+    // Normal mode: generate specified number of apples
     const newApples: Position[] = [];
     for (let i = 0; i < appleCount; i++) {
       let newApple: Position;
@@ -87,7 +104,7 @@ export default function SnakeGame() {
       newApples.push(newApple);
     }
     return newApples;
-  }, [GRID_SIZE, appleCount]);
+  }, [GRID_SIZE, appleCount, difficulty]);
 
   // Reset game
   const resetGame = useCallback(() => {
@@ -98,6 +115,7 @@ export default function SnakeGame() {
     setDirection('RIGHT');
     directionRef.current = 'RIGHT';
     setScore(0);
+    setGridOffset({ x: 0, y: 0 });
     setGameState('start');
   }, [generateApples, GRID_SIZE]);
 
@@ -184,18 +202,27 @@ export default function SnakeGame() {
             break;
         }
 
-        // Check wall collision
-        if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
-          setGameState('gameOver');
-          updateGlobalHighScore(score);
-          return currentSnake;
-        }
+        // Handle infinite scrolling for All Apples mode
+        if (difficulty === 'allApples') {
+          // Wrap around the grid for infinite scrolling
+          if (newHead.x < 0) newHead.x = GRID_SIZE - 1;
+          if (newHead.x >= GRID_SIZE) newHead.x = 0;
+          if (newHead.y < 0) newHead.y = GRID_SIZE - 1;
+          if (newHead.y >= GRID_SIZE) newHead.y = 0;
+        } else {
+          // Normal mode: check wall collision
+          if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
+            setGameState('gameOver');
+            updateGlobalHighScore(score);
+            return currentSnake;
+          }
 
-        // Check self collision
-        if (currentSnake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
-          setGameState('gameOver');
-          updateGlobalHighScore(score);
-          return currentSnake;
+          // Check self collision (only in normal mode)
+          if (currentSnake.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
+            setGameState('gameOver');
+            updateGlobalHighScore(score);
+            return currentSnake;
+          }
         }
 
         let newSnake = [newHead, ...currentSnake];
@@ -204,9 +231,16 @@ export default function SnakeGame() {
         const eatenAppleIndex = apples.findIndex(apple => apple.x === newHead.x && apple.y === newHead.y);
         if (eatenAppleIndex !== -1) {
           setScore(prev => prev + 1);
-          const newApples = apples.filter((_, index) => index !== eatenAppleIndex);
-          const replacementApple = generateApples([...newSnake, ...newApples]);
-          setApples([...newApples, ...replacementApple].slice(0, appleCount));
+          
+          if (difficulty === 'allApples') {
+            // All Apples mode: regenerate all apples except where snake is
+            setApples(generateApples([...newSnake]));
+          } else {
+            // Normal mode: replace eaten apple
+            const newApples = apples.filter((_, index) => index !== eatenAppleIndex);
+            const replacementApple = generateApples([...newSnake, ...newApples]);
+            setApples([...newApples, ...replacementApple].slice(0, appleCount));
+          }
         } else {
           newSnake.pop();
         }
@@ -328,26 +362,34 @@ export default function SnakeGame() {
                 >
                   Hard (5x5) - Faster
                 </button>
+                <button
+                  onClick={() => selectDifficulty('allApples')}
+                  className="px-6 py-3 rounded-lg font-medium transition-colors bg-purple-500 text-white hover:bg-purple-600"
+                >
+                  All Apples (20x20) - Infinite Grid
+                </button>
               </div>
               
-              {/* Apple Count Slider */}
-              <div className="mb-6">
-                <label className="block text-gray-700 font-medium mb-2">
-                  Apples: {appleCount}
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  value={appleCount}
-                  onChange={(e) => setAppleCount(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>1</span>
-                  <span>10</span>
+              {/* Apple Count Slider - hide for All Apples mode */}
+              {difficulty !== 'allApples' && (
+                <div className="mb-6">
+                  <label className="block text-gray-700 font-medium mb-2">
+                    Apples: {appleCount}
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={appleCount}
+                    onChange={(e) => setAppleCount(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>1</span>
+                    <span>10</span>
+                  </div>
                 </div>
-              </div>
+              )}
               
               <button
                 onClick={() => setGameState('start')}
@@ -363,8 +405,12 @@ export default function SnakeGame() {
           <div className="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center z-40">
             <div className="bg-white rounded-xl p-8 text-center">
               <h2 className="text-3xl font-bold mb-4 text-gray-800">Ready to Play?</h2>
-              <p className="text-gray-600 mb-2">Difficulty: <span className="font-bold capitalize">{difficulty}</span> ({GRID_SIZE}x{GRID_SIZE})</p>
-              <p className="text-gray-600 mb-6">Apples: <span className="font-bold">{appleCount}</span></p>
+              <p className="text-gray-600 mb-2">Difficulty: <span className="font-bold capitalize">{difficulty === 'allApples' ? 'All Apples' : difficulty}</span> ({GRID_SIZE}x{GRID_SIZE})</p>
+              {difficulty === 'allApples' ? (
+                <p className="text-gray-600 mb-6">Every square is an apple! Infinite scrolling grid - no walls, no self-collision!</p>
+              ) : (
+                <p className="text-gray-600 mb-6">Apples: <span className="font-bold">{appleCount}</span></p>
+              )}
               <p className="text-gray-600 mb-6">Press Start, then use arrow keys or WASD to move snake</p>
               <button
                 onClick={startGame}
