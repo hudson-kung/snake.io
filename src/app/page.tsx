@@ -13,7 +13,7 @@ const DIFFICULTY_SETTINGS = {
   easy: { gridSize: 10, cellSize: 40, speed: 250 },
   medium: { gridSize: 7, cellSize: 50, speed: 200 },
   hard: { gridSize: 5, cellSize: 70, speed: 150 },
-  allApples: { gridSize: 20, cellSize: 30, speed: 100 }
+  allApples: { gridSize: 5, cellSize: 70, speed: 80 }
 };
 
 export default function SnakeGame() {
@@ -25,7 +25,7 @@ export default function SnakeGame() {
   const [gameState, setGameState] = useState<'difficultySelect' | 'start' | 'playing' | 'gameOver'>('difficultySelect');
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
-  const [gridOffset, setGridOffset] = useState({ x: 0, y: 0 });
+  const [virtualGridCenter, setVirtualGridCenter] = useState({ x: 0, y: 0 });
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
   const directionRef = useRef(direction);
   const gameStartedRef = useRef(false);
@@ -74,14 +74,20 @@ export default function SnakeGame() {
 
   // Generate multiple apple positions
   const generateApples = useCallback((currentSnake: Position[]): Position[] => {
-    // All Apples mode: generate apples for all empty squares
+    // All Apples mode: generate apples for all empty squares in virtual grid
     if (difficulty === 'allApples') {
       const allApples: Position[] = [];
-      for (let x = 0; x < GRID_SIZE; x++) {
-        for (let y = 0; y < GRID_SIZE; y++) {
-          const isSnakePosition = currentSnake.some(segment => segment.x === x && segment.y === y);
+      const viewRange = 10; // Show 10x10 area around snake head
+      
+      for (let x = -viewRange; x <= viewRange; x++) {
+        for (let y = -viewRange; y <= viewRange; y++) {
+          const worldX = virtualGridCenter.x + x;
+          const worldY = virtualGridCenter.y + y;
+          const isSnakePosition = currentSnake.some(segment => 
+            segment.x === worldX && segment.y === worldY
+          );
           if (!isSnakePosition) {
-            allApples.push({ x, y });
+            allApples.push({ x: worldX, y: worldY });
           }
         }
       }
@@ -104,20 +110,20 @@ export default function SnakeGame() {
       newApples.push(newApple);
     }
     return newApples;
-  }, [GRID_SIZE, appleCount, difficulty]);
+  }, [GRID_SIZE, appleCount, difficulty, virtualGridCenter]);
 
   // Reset game
   const resetGame = useCallback(() => {
-    const centerPos = Math.floor(GRID_SIZE / 2);
+    const centerPos = difficulty === 'allApples' ? 0 : Math.floor(GRID_SIZE / 2);
     const initialSnake = [{ x: centerPos, y: centerPos }];
     setSnake(initialSnake);
     setApples(generateApples(initialSnake));
     setDirection('RIGHT');
     directionRef.current = 'RIGHT';
     setScore(0);
-    setGridOffset({ x: 0, y: 0 });
+    setVirtualGridCenter({ x: centerPos, y: centerPos });
     setGameState('start');
-  }, [generateApples, GRID_SIZE]);
+  }, [generateApples, GRID_SIZE, difficulty]);
 
   // Start game
   const startGame = useCallback(() => {
@@ -204,11 +210,10 @@ export default function SnakeGame() {
 
         // Handle infinite scrolling for All Apples mode
         if (difficulty === 'allApples') {
-          // Wrap around the grid for infinite scrolling
-          if (newHead.x < 0) newHead.x = GRID_SIZE - 1;
-          if (newHead.x >= GRID_SIZE) newHead.x = 0;
-          if (newHead.y < 0) newHead.y = GRID_SIZE - 1;
-          if (newHead.y >= GRID_SIZE) newHead.y = 0;
+          // Update virtual grid center to follow snake head
+          setVirtualGridCenter(prev => ({ x: newHead.x, y: newHead.y }));
+          
+          // No collision checks - infinite grid
         } else {
           // Normal mode: check wall collision
           if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
@@ -307,34 +312,58 @@ export default function SnakeGame() {
             ))}
 
             {/* Snake */}
-            {snake.map((segment, index) => (
-              <div
-                key={index}
-                className={`absolute transition-all duration-100 ${
-                  index === 0 ? 'bg-green-500 z-20' : 'bg-green-400 z-10'
-                } rounded-sm`}
-                style={{
-                  left: segment.x * CELL_SIZE + 2,
-                  top: segment.y * CELL_SIZE + 2,
-                  width: CELL_SIZE - 4,
-                  height: CELL_SIZE - 4,
-                }}
-              />
-            ))}
+            {snake.map((segment, index) => {
+              // Convert world coordinates to screen coordinates for All Apples mode
+              let screenX, screenY;
+              if (difficulty === 'allApples') {
+                screenX = (segment.x - virtualGridCenter.x) * CELL_SIZE + (GRID_SIZE * CELL_SIZE) / 2;
+                screenY = (segment.y - virtualGridCenter.y) * CELL_SIZE + (GRID_SIZE * CELL_SIZE) / 2;
+              } else {
+                screenX = segment.x * CELL_SIZE;
+                screenY = segment.y * CELL_SIZE;
+              }
+              
+              return (
+                <div
+                  key={index}
+                  className={`absolute transition-all duration-100 ${
+                    index === 0 ? 'bg-green-500 z-20' : 'bg-green-400 z-10'
+                  } rounded-sm`}
+                  style={{
+                    left: screenX + 2,
+                    top: screenY + 2,
+                    width: CELL_SIZE - 4,
+                    height: CELL_SIZE - 4,
+                  }}
+                />
+              );
+            })}
 
             {/* Apples */}
-            {apples.map((apple, index) => (
-              <div
-                key={index}
-                className="absolute bg-red-500 rounded-full transition-all duration-100 z-30"
-                style={{
-                  left: apple.x * CELL_SIZE + 8,
-                  top: apple.y * CELL_SIZE + 8,
-                  width: CELL_SIZE - 16,
-                  height: CELL_SIZE - 16,
-                }}
-              />
-            ))}
+            {apples.map((apple, index) => {
+              // Convert world coordinates to screen coordinates for All Apples mode
+              let screenX, screenY;
+              if (difficulty === 'allApples') {
+                screenX = (apple.x - virtualGridCenter.x) * CELL_SIZE + (GRID_SIZE * CELL_SIZE) / 2;
+                screenY = (apple.y - virtualGridCenter.y) * CELL_SIZE + (GRID_SIZE * CELL_SIZE) / 2;
+              } else {
+                screenX = apple.x * CELL_SIZE;
+                screenY = apple.y * CELL_SIZE;
+              }
+              
+              return (
+                <div
+                  key={index}
+                  className="absolute bg-red-500 rounded-full transition-all duration-100 z-30"
+                  style={{
+                    left: screenX + 8,
+                    top: screenY + 8,
+                    width: CELL_SIZE - 16,
+                    height: CELL_SIZE - 16,
+                  }}
+                />
+              );
+            })}
           </div>
         </div>
 
@@ -366,7 +395,7 @@ export default function SnakeGame() {
                   onClick={() => selectDifficulty('allApples')}
                   className="px-6 py-3 rounded-lg font-medium transition-colors bg-purple-500 text-white hover:bg-purple-600"
                 >
-                  All Apples (20x20) - Infinite Grid
+                  All Apples (5x5) - Infinite Grid
                 </button>
               </div>
               
